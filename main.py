@@ -1,12 +1,14 @@
+
 import argparse
 import statistics
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from zoneinfo import ZoneInfo
 
 TEHRAN = ZoneInfo("Asia/Tehran")
+URL = "https://easytrader.emofid.com/"
 
 
 def probe(url, timeout=5):
@@ -32,26 +34,53 @@ def probe(url, timeout=5):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--url",
-        default="https://easytrader.emofid.com/",
+    parser = argparse.ArgumentParser(
+        description="Safe Sarkhati connection test; no orders."
     )
-    parser.add_argument("--duration", type=int, default=180)
+    parser.add_argument("--target-time", required=True, help="HH:MM Tehran time")
+    parser.add_argument("--prep-minutes", type=int, default=3)
     parser.add_argument("--interval", type=float, default=2)
     args = parser.parse_args()
 
-    print("SARKHATI - SAFE LATENCY TEST")
-    print("Tehran time:", datetime.now(TEHRAN).isoformat())
-    print("URL:", args.url)
-    print("No orders will be submitted.")
+    try:
+        hour, minute = map(int, args.target_time.split(":"))
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError
+    except ValueError:
+        raise SystemExit("Invalid target time. Use HH:MM, for example 19:28.")
 
+    if args.prep_minutes < 0 or args.interval <= 0:
+        raise SystemExit("Preparation must be >= 0 and interval must be > 0.")
+
+    now = datetime.now(TEHRAN)
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    if target <= now:
+        raise SystemExit(
+            "Target time has already passed today. "
+            "Run again with a future Tehran time."
+        )
+
+    prep_start = target - timedelta(minutes=args.prep_minutes)
+
+    print("SARKHATI - SAFE CONNECTION TEST", flush=True)
+    print("Current Tehran time:", now.isoformat(), flush=True)
+    print("Target time:", target.isoformat(), flush=True)
+    print("Preparation starts:", prep_start.isoformat(), flush=True)
+    print("Test interval:", args.interval, "seconds", flush=True)
+    print("URL:", URL, flush=True)
+    print("No orders will be submitted.", flush=True)
+
+    while datetime.now(TEHRAN) < prep_start:
+        remaining = (prep_start - datetime.now(TEHRAN)).total_seconds()
+        time.sleep(min(1, max(0.1, remaining)))
+
+    print("\nPreparation started.", flush=True)
     results = []
-    deadline = time.monotonic() + max(1, args.duration)
 
-    while time.monotonic() < deadline:
+    while datetime.now(TEHRAN) < target:
         stamp = datetime.now(TEHRAN)
-        latency, status = probe(args.url)
+        latency, status = probe(URL)
         results.append(latency)
 
         print(
@@ -61,19 +90,20 @@ def main():
             flush=True,
         )
 
-        remaining = deadline - time.monotonic()
+        remaining = (target - datetime.now(TEHRAN)).total_seconds()
         if remaining > 0:
-            time.sleep(min(max(args.interval, 0.2), remaining))
+            time.sleep(min(args.interval, remaining))
+
+    print("\nSUMMARY", flush=True)
+    print("Samples:", len(results), flush=True)
 
     if results:
-        print("\nSUMMARY")
-        print("Samples:", len(results))
-        print(f"Minimum: {min(results):.1f} ms")
-        print(f"Average: {statistics.mean(results):.1f} ms")
-        print(f"Maximum: {max(results):.1f} ms")
-        print(f"Median: {statistics.median(results):.1f} ms")
+        print(f"Minimum: {min(results):.1f} ms", flush=True)
+        print(f"Average: {statistics.mean(results):.1f} ms", flush=True)
+        print(f"Maximum: {max(results):.1f} ms", flush=True)
+        print(f"Median: {statistics.median(results):.1f} ms", flush=True)
 
-    print("Finished. No orders were submitted.")
+    print("Target time reached. No orders were submitted.", flush=True)
 
 
 if __name__ == "__main__":
