@@ -2,9 +2,8 @@ name: Sarkhati Safe Test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: "10 5 * * *"
 
 permissions:
   contents: read
@@ -26,12 +25,5 @@ jobs:
       - name: Run syntax check
         run: python -m py_compile main.py
 
-      - name: Show Tehran time
-        run: |
-          python - <<'PY'
-          from datetime import datetime
-          from zoneinfo import ZoneInfo
-          print("Tehran time:", datetime.now(ZoneInfo("Asia/Tehran")))
-          print("Sarkhati safe test is ready.")
-          print("No orders were sent.")
-          PY
+      - name: Measure network latency
+        run: python -u main.py --duration 180 --interval 2
