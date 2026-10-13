@@ -1,9 +1,32 @@
+
 name: Sarkhati Safe Test
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "10 5 * * *"
+    inputs:
+      target_time:
+        description: "Target time in Tehran, HH:MM"
+        required: true
+        default: "19:28"
+        type: string
+      prep_minutes:
+        description: "Minutes before target to start testing"
+        required: true
+        default: "3"
+        type: choice
+        options:
+          - "3"
+          - "5"
+          - "10"
+      interval:
+        description: "Seconds between connection tests"
+        required: true
+        default: "2"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "5"
 
 permissions:
   contents: read
@@ -11,7 +34,7 @@ permissions:
 jobs:
   safe-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -22,8 +45,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run syntax check
+      - name: Check Python syntax
         run: python -m py_compile main.py
 
-      - name: Measure network latency
-        run: python -u main.py --duration 180 --interval 2
+      - name: Run scheduled safe connection test
+        env:
+          TARGET_TIME: ${{ inputs.target_time }}
+          PREP_MINUTES: ${{ inputs.prep_minutes }}
+          TEST_INTERVAL: ${{ inputs.interval }}
+        run: |
+          python -u main.py \
+            --target-time "$TARGET_TIME" \
+            --prep-minutes "$PREP_MINUTES" \
+            --interval "$TEST_INTERVAL"
